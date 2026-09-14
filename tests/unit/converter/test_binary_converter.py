@@ -67,12 +67,12 @@ async def test_binary_converter_ignores_unselected_word_exceeding_bits():
 
 # Deprecation tests: remove in 1.4.0.
 class TestBinaryConverterValidationDeprecation:
-    @pytest.mark.parametrize("prompt", ["", "hello", "hello 👋"])
-    def test_validate_input_warns_and_checks_whole_prompt(self, prompt: str) -> None:
-        converter = BinaryConverter(word_selection_strategy=WordIndexSelectionStrategy(indices=[0]))
+    @pytest.mark.parametrize(("index", "raises"), [(0, False), (1, True)])
+    def test_validate_input_warns_and_checks_selected_words(self, *, index: int, raises: bool) -> None:
+        converter = BinaryConverter(word_selection_strategy=WordIndexSelectionStrategy(indices=[index]))
         with pytest.warns(DeprecationWarning) as recorded:
-            with pytest.raises(ValueError, match="Minimum required bits: 17") if "👋" in prompt else nullcontext():
-                assert converter.validate_input(prompt) is None
+            with pytest.raises(ValueError, match="Minimum required bits: 17") if raises else nullcontext():
+                assert converter.validate_input("hello 👋") is None
         assert len(recorded) == 1
         assert str(recorded[0].message) == (
             "BinaryConverter.validate_input is deprecated and will be removed in 1.4.0. "
@@ -112,7 +112,13 @@ class TestBinaryConverterValidationDeprecation:
             converter = converter_type(word_selection_strategy=WordIndexSelectionStrategy(indices=[0]))
             with warnings.catch_warnings(record=True) as recorded:
                 warnings.simplefilter("always", DeprecationWarning)
-                with pytest.raises(ValueError) if mode != "accept" else nullcontext():
-                    await converter.convert_async(prompt="hello 👋")
+                with (
+                    pytest.raises(ValueError, match="Rejected by custom validation")
+                    if mode == "reject"
+                    else nullcontext()
+                ):
+                    result = await converter.convert_async(prompt="hello 👋")
             assert validated_prompts == ["hello 👋"]
             assert [warning.category for warning in recorded] == ([DeprecationWarning] if mode == "super" else [])
+            if mode != "reject":
+                assert result.output_text.endswith("👋")

@@ -69,11 +69,11 @@ class BinaryConverter(WordLevelConverter):
     # Deprecation shim: remove in 1.4.0 with both hooks; keep _validate_word.
     def validate_input(self, prompt: str) -> None:
         """
-        Validate whole-prompt bit width, ignoring word selection (deprecated until 1.4.0).
+        Validate the bit width of selected words (deprecated until 1.4.0).
 
-        Conversion checks selected words instead; subclass overrides may still call this
-        method via ``super()``. After removal, standalone preflight is caller-owned:
-        inherited ``WordLevelConverter.validate_input`` does not check bit width.
+        Subclass overrides may still call this method via ``super()``. After removal,
+        standalone preflight is caller-owned: inherited ``WordLevelConverter.validate_input``
+        does not check bit width.
 
         Args:
             prompt (str): The input text prompt to validate.
@@ -86,7 +86,10 @@ class BinaryConverter(WordLevelConverter):
             new_item="automatic selected-word validation during BinaryConverter.convert_async",
             removed_in="1.4.0",
         )
-        self._validate_word(prompt)
+        words = prompt.split() if self._word_split_separator is None else prompt.split(self._word_split_separator)
+        selected_indices = self._word_selection_strategy.select_words(words=words)
+        for idx in selected_indices:
+            self._validate_word(words[idx])
 
     # Deprecation helper: remove in 1.4.0 with validate_input.
     def _validate_before_conversion(self, prompt: str) -> None:
