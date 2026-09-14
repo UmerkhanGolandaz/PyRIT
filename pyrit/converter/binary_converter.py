@@ -83,7 +83,7 @@ class BinaryConverter(WordLevelConverter):
         """
         print_deprecation_message(
             old_item="BinaryConverter.validate_input",
-            new_item="automatic selected-word validation during BinaryConverter.convert_async",
+            new_item="BinaryConverter.convert_async",
             removed_in="1.4.0",
         )
         words = prompt.split() if self._word_split_separator is None else prompt.split(self._word_split_separator)
@@ -129,9 +129,7 @@ class BinaryConverter(WordLevelConverter):
         Raises:
             ValueError: If ``bits_per_char`` is too small to represent any character in the word.
         """
-        # Validated per word rather than over the whole prompt: a word selection strategy may
-        # leave words untouched, and a character that is never encoded cannot overflow
-        # bits_per_char.
+        # Validate per word because unselected words are not encoded.
         self._validate_word(word)
         bits = self.bits_per_char.value
         return " ".join(format(ord(char), f"0{bits}b") for char in word)

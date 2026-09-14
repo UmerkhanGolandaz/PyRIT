@@ -76,7 +76,7 @@ class TestBinaryConverterValidationDeprecation:
         assert len(recorded) == 1
         assert str(recorded[0].message) == (
             "BinaryConverter.validate_input is deprecated and will be removed in 1.4.0. "
-            "Use automatic selected-word validation during BinaryConverter.convert_async instead."
+            "Use BinaryConverter.convert_async instead."
         )
         assert recorded[0].filename == __file__
 
