@@ -1,6 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
+# Deprecation test support: remove in 1.4.0.
+import warnings
+from contextlib import nullcontext
+
 import pytest
 
 from pyrit.converter import BinaryConverter, ConverterResult
@@ -59,3 +63,56 @@ async def test_binary_converter_ignores_unselected_word_exceeding_bits():
     space_binary = format(ord(" "), "016b")
     assert result.output_text == f"{expected_hello} {space_binary} 👋"
     assert result.output_type == "text"
+
+
+# Deprecation tests: remove in 1.4.0.
+class TestBinaryConverterValidationDeprecation:
+    @pytest.mark.parametrize("prompt", ["", "hello", "hello 👋"])
+    def test_validate_input_warns_and_checks_whole_prompt(self, prompt: str) -> None:
+        converter = BinaryConverter(word_selection_strategy=WordIndexSelectionStrategy(indices=[0]))
+        with pytest.warns(DeprecationWarning) as recorded:
+            with pytest.raises(ValueError, match="Minimum required bits: 17") if "👋" in prompt else nullcontext():
+                assert converter.validate_input(prompt) is None
+        assert len(recorded) == 1
+        assert str(recorded[0].message) == (
+            "BinaryConverter.validate_input is deprecated and will be removed in 1.4.0. "
+            "Use automatic selected-word validation during BinaryConverter.convert_async instead."
+        )
+        assert recorded[0].filename == __file__
+
+    @pytest.mark.parametrize(("prompt", "index"), [("", 0), ("hello 👋", 0), ("hello 👋", 1)])
+    async def test_builtin_validation_does_not_warn_async(self, *, prompt: str, index: int) -> None:
+        class PlainBinaryConverter(BinaryConverter):
+            pass
+
+        for converter_type in (BinaryConverter, PlainBinaryConverter):
+            converter = converter_type(word_selection_strategy=WordIndexSelectionStrategy(indices=[index]))
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", DeprecationWarning)
+                with pytest.raises(ValueError, match="bits_per_char=16") if index == 1 else nullcontext():
+                    await converter.convert_async(prompt=prompt)
+
+    @pytest.mark.parametrize("mode", ["accept", "reject", "super"])
+    async def test_custom_validation_is_preserved_async(self, mode: str) -> None:
+        validated_prompts: list[str] = []
+
+        class CustomBinaryConverter(BinaryConverter):
+            def validate_input(self, prompt: str) -> None:
+                validated_prompts.append(prompt)
+                if mode == "reject":
+                    raise ValueError("Rejected by custom validation")
+                if mode == "super":
+                    super().validate_input(prompt)
+
+        class InheritedCustomBinaryConverter(CustomBinaryConverter):
+            pass
+
+        for converter_type in (CustomBinaryConverter, InheritedCustomBinaryConverter):
+            validated_prompts.clear()
+            converter = converter_type(word_selection_strategy=WordIndexSelectionStrategy(indices=[0]))
+            with warnings.catch_warnings(record=True) as recorded:
+                warnings.simplefilter("always", DeprecationWarning)
+                with pytest.raises(ValueError) if mode != "accept" else nullcontext():
+                    await converter.convert_async(prompt="hello 👋")
+            assert validated_prompts == ["hello 👋"]
+            assert [warning.category for warning in recorded] == ([DeprecationWarning] if mode == "super" else [])

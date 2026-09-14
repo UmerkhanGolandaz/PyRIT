@@ -6,6 +6,8 @@ from __future__ import annotations
 from enum import Enum
 from typing import TYPE_CHECKING
 
+# Deprecation support: remove in 1.4.0.
+from pyrit.common.deprecation import print_deprecation_message
 from pyrit.converter.word_level_converter import WordLevelConverter
 
 if TYPE_CHECKING:
@@ -63,6 +65,34 @@ class BinaryConverter(WordLevelConverter):
                 "bits_per_char": self.bits_per_char.value,
             }
         )
+
+    # Deprecation shim: remove in 1.4.0 with both hooks; keep _validate_word.
+    def validate_input(self, prompt: str) -> None:
+        """
+        Validate whole-prompt bit width, ignoring word selection (deprecated until 1.4.0).
+
+        Conversion checks selected words instead; subclass overrides may still call this
+        method via ``super()``. After removal, standalone preflight is caller-owned:
+        inherited ``WordLevelConverter.validate_input`` does not check bit width.
+
+        Args:
+            prompt (str): The input text prompt to validate.
+
+        Raises:
+            ValueError: If ``bits_per_char`` is too small to represent any character in the prompt.
+        """
+        print_deprecation_message(
+            old_item="BinaryConverter.validate_input",
+            new_item="automatic selected-word validation during BinaryConverter.convert_async",
+            removed_in="1.4.0",
+        )
+        self._validate_word(prompt)
+
+    # Deprecation helper: remove in 1.4.0 with validate_input.
+    def _validate_before_conversion(self, prompt: str) -> None:
+        """Skip only the built-in deprecated validator, preserving subclass overrides."""
+        if type(self).validate_input is not BinaryConverter.validate_input:
+            self.validate_input(prompt=prompt)
 
     def _validate_word(self, word: str) -> None:
         """
